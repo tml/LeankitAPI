@@ -1,6 +1,7 @@
 import requests
 from requests.auth import HTTPBasicAuth
 import json
+import pdb
 
 
 OK_RESPONSE_CODES = [
@@ -24,21 +25,59 @@ class Entry(dict):
 class Account(object):
 	""" Represents your Leankit Kanban account """
 	def __init__(self, hostname, username=None, password=None):
-		self.url = 'https://%s.leankitkanban.com' % hostname
+		self.base = 'https://%s.leankitkanban.com/Kanban/Api' % hostname
 
 		if (username is not None and password is not None):
 			self._auth=HTTPBasicAuth(username, password)
 		else:
 			raise NotImplementedError("Account does not allow anonymous authentication")
 
-	def _fetchAccountInfo(self):
+	def boards(self):
+		self._boards = []
+		for board in self.fetch('Boards'):
+			self._boards.append(Board(board.Id, self))
+		return self._boards
+
+	def fetch(self, url):
 		try:
-			r = requests.get(self.url)
+			
+			r = requests.get("%s/%s" % (self.base, url), headers={'Content-Type':'application/json'}, auth=self._auth)
 		except Exception as e:
 			raise IOError("Unable to complete HTTP Request: %s" % e.message)
 
-		response = Entry(json.loads(r.text))
 		if (r.status_code not in OK_RESPONSE_CODES):
+			pdb.set_trace()
 			raise IOError("Error from Leankit [%d] %s" % (r.status_code, r.content))
+
+		self._last_json = r.text
+		replyData = json.loads(r.text)['ReplyData']
+		#pdb.set_trace()
+		response = []
+		try:
+			for record in replyData:
+				response.append(Entry(record))
+		except ValueError as e:
+			# Triggered on lists of lists
+			for record in replyData[0]:
+				response.append(Entry(record))
 		return response
 
+class Board(object):
+	_data = {}
+	_entry = Entry()
+
+	def __init__(self, id, account):
+		boardData = account.fetch('Boards/%d' % id)
+		self._data = boardData[0]
+		self._entry = Entry(self._data)
+
+	def __getattr__(self, k):
+		return self._entry.get(k)
+
+	def __setattr__(self, k, v):
+		""" Cannot set Board attributes """
+		pass
+
+class Lane(object):
+	def __init__(self, id, account):
+		self._data = account.fetch()
