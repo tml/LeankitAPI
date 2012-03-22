@@ -22,6 +22,21 @@ class Entry(dict):
 	def __setattr__(self, k, v):
 		self[k] = v
 
+class Board(Entry):
+	pass
+
+class Lane(Entry):
+	pass
+
+class Card(Entry):
+	pass
+
+class Comment(Entry):
+	pass
+
+class Attachment(Entry):
+	pass
+
 class Account(object):
 	""" Represents your Leankit Kanban account """
 	def __init__(self, hostname, username=None, password=None):
@@ -35,12 +50,12 @@ class Account(object):
 	def boards(self):
 		self._boards = []
 		for board in self.fetch('Boards'):
-			self._boards.append(Board(board.Id, self))
+			boardData = self.fetch('Boards/%d' % board.Id)[0]
+			self._boards.append(Board(boardData))
 		return self._boards
 
 	def fetch(self, url):
 		try:
-			
 			r = requests.get("%s/%s" % (self.base, url), headers={'Content-Type':'application/json'}, auth=self._auth)
 		except Exception as e:
 			raise IOError("Unable to complete HTTP Request: %s" % e.message)
@@ -51,33 +66,11 @@ class Account(object):
 
 		self._last_json = r.text
 		replyData = json.loads(r.text)['ReplyData']
-		#pdb.set_trace()
 		response = []
 		try:
 			for record in replyData:
 				response.append(Entry(record))
 		except ValueError as e:
-			# Triggered on lists of lists
 			for record in replyData[0]:
 				response.append(Entry(record))
 		return response
-
-class Board(object):
-	_data = {}
-	_entry = Entry()
-
-	def __init__(self, id, account):
-		boardData = account.fetch('Boards/%d' % id)
-		self._data = boardData[0]
-		self._entry = Entry(self._data)
-
-	def __getattr__(self, k):
-		return self._entry.get(k)
-
-	def __setattr__(self, k, v):
-		""" Cannot set Board attributes """
-		pass
-
-class Lane(object):
-	def __init__(self, id, account):
-		self._data = account.fetch()
